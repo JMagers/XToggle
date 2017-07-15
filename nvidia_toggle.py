@@ -130,7 +130,8 @@ def apply_changes(monitors):
             info += monitor.get_command() + SEP
     command = 'nvidia-settings --assign CurrentMetaMode="%s"' % info.strip(SEP)
     subprocess.run(command, stdout=subprocess.DEVNULL, shell=True)
-    print(command)
+    if args.verbose:
+        print(command)
 
 
 def only_target(monitors, target):
@@ -139,10 +140,9 @@ def only_target(monitors, target):
     target.is_connected = True
 
 
-def enable_all_but_target(monitors, target):
+def enable_all(monitors):
     for monitor in monitors:
         monitor.is_connected = True
-    target.is_connected = False
 
 
 def filter_out_disconnected(monitors):
@@ -163,9 +163,9 @@ elif args.action == 'toggle-only':
         not target.is_connected
         or len(filter_out_disconnected(sorted_monitors)) > 1
     ):
-        only_target(target)
+        only_target(sorted_monitors, target)
     else:
-        enable_all_but_target(sorted_monitors, target)
+        enable_all(sorted_monitors)
 elif args.action == 'enable-only':
     only_target(sorted_monitors, target)
 
