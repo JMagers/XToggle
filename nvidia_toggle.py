@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 CONFIG_PATH = '/etc/X11/xorg.conf'
 MONITORS_XML = os.path.join(os.environ['HOME'], '.config', 'monitors.xml')
@@ -19,7 +20,7 @@ class Monitor:
 
 
 # Parse config file for monitor info
-monitors = []
+monitors = {}
 try:
     with open(CONFIG_PATH, 'r') as conf:
         for line in conf:
@@ -29,23 +30,40 @@ try:
             except AttributeError:
                 continue
             for monitor_string in settings_string.split(','):
-                monitors.append(Monitor(monitor_string))
+                monitor = Monitor(monitor_string)
+                monitors[monitor.name] = monitor
         if not monitors:
-            sys.exit("No monitors found.")
+            sys.exit("No monitors found!")
 except FileNotFoundError:
-    sys.exit("'%s' does not exist" % CONFIG_PATH)
+    sys.exit("'%s' does not exist!" % CONFIG_PATH)
+
+# Get width of each monitor
+tree = ET.parse(MONITORS_XML)
+for output_tag in tree.findall('.//configuration/output'):
+    try:
+        name = output_tag.attrib['name']
+        monitor = monitors[name]
+    except KeyError:
+        continue
+    try:
+        monitor.width = int(output_tag.find('width').text)
+    except AttributeError:
+        sys.exit("Monitor, '%s', has no width tag in '%s'!"
+                 % (name, MONITORS_XML))
+    except ValueError:
+        sys.exit("Width tag for monitor, '%s', in '%s' is not an integer!"
+                 % (name, MONITORS_XML))
+
+# Check that all monitor widths were found
+for name, monitor in monitors.items():
+    if monitor.width is None:
+        sys.exit("Could not find info for monitor, '%s', in '%s'!"
+                 % (name, MONITORS_XML))
 
 # Find out which monitors are currently connected
 p = subprocess.run(['xrandr', '-q'],
                    stdout=subprocess.PIPE,
                    universal_newlines=True)
-for monitor in monitors:
+for name, monitor in monitors.items():
     query = monitor.name + r' connected (primary )?\d+x\d+\+\d+\+\d+'
     monitor.is_connected = bool(re.search(query, p.stdout))
-
-# Get width of each monitor
-with open(MONITORS_XML, 'r') as xml:
-    text = xml.read()
-    for monitor in monitors:
-        query = r'name="' + monitor.name + r'"[.\s\S]*?<width>(\d+)</width>'
-        monitor.width = int(re.search(query, text).group(1))
