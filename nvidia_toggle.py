@@ -36,6 +36,7 @@ class Monitor:
         self._command = command.strip()
         self.name = command.split(':')[0].strip()
         self.pos = int(command.split('+')[1])
+        self.rank = None
         self.width = None
         self.is_connected = None
 
@@ -45,11 +46,11 @@ class Monitor:
         return '+'.join(command_split)
 
     def print_info(self):
-        print("Name: %s" % self.name)
-        print("Position: %d" % self.pos)
-        print("Width: %d" % self.width)
-        print("Command: '%s'" % self.get_command())
-        print("Connected: %s" % self.is_connected)
+        if self.is_connected:
+            connected_status = 'ON'
+        else:
+            connected_status = 'OFF'
+        print("%s %s %d" % (self.name, connected_status, self.rank))
 
 
 # Parse config file for monitor info
@@ -101,8 +102,11 @@ for name, monitor in monitors.items():
     query = monitor.name + r' connected (primary )?\d+x\d+\+\d+\+\d+'
     monitor.is_connected = bool(re.search(query, p.stdout))
 
-# Sort monitors by their positions
+# Sort monitors by their positions and apply ranks
 sorted_monitors = sorted(monitors.values(), key=lambda x: x.pos)
+for i, monitor in enumerate(sorted_monitors):
+    monitor.rank = i + 1
+
 target = sorted_monitors[args.target - 1]
 
 
@@ -149,9 +153,6 @@ def filter_out_disconnected(monitors):
     return [mon for mon in sorted_monitors if mon.is_connected]
 
 
-if args.status:
-    print_monitors(sorted_monitors)
-
 if args.action == 'toggle':
     target.is_connected = not target.is_connected
 elif args.action == 'enable':
@@ -172,3 +173,6 @@ elif args.action == 'enable-only':
 connected_monitors = filter_out_disconnected(sorted_monitors)
 recalculate_positions(connected_monitors)
 apply_changes(connected_monitors)
+
+if args.status:
+    print_monitors(sorted_monitors)
