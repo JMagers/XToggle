@@ -13,14 +13,6 @@ MONITORS_XML = os.path.join(os.environ['HOME'], '.config', 'monitors.xml')
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('action',
-                    choices=['toggle', 'enable', 'disable', 'toggle-only',
-                             'enable-only'],
-                    help='action to apply to target monitor')
-parser.add_argument('target',
-                    type=int,
-                    help='position of target monitor to apply action to '
-                         'starting at 1 from left to right')
 parser.add_argument('--verbose', '-v',
                     action='store_true',
                     help='print the command used to apply the settings '
@@ -28,6 +20,37 @@ parser.add_argument('--verbose', '-v',
 parser.add_argument('--status', '-s',
                     action='store_true',
                     help='print status of monitors')
+subparsers = parser.add_subparsers(title='commands', dest='subparser')
+
+TARGET_HELP = ('position of target monitor to apply action to starting at 1 '
+               'from left to right')
+
+# Toggle command
+parser_toggle = subparsers.add_parser('toggle', help='toggle target monitor')
+parser_toggle.add_argument('target', type=int, help=TARGET_HELP)
+
+# Enable command
+parser_enable = subparsers.add_parser('enable', help='enable target monitor')
+parser_enable.add_argument('target', type=int, help=TARGET_HELP)
+
+# Disable command
+parser_disable = subparsers.add_parser('disable',
+                                       help='disable target monitor')
+parser_disable.add_argument('target', type=int, help=TARGET_HELP)
+
+# Toggle-only command
+parser_toggle_only = subparsers.add_parser('toggle-only',
+                                           help='toggle wheather or not the '
+                                                'target monitor is the only '
+                                                'one on')
+parser_toggle_only.add_argument('target', type=int, help=TARGET_HELP)
+
+# Enable-only command
+parser_enable_only = subparsers.add_parser('enable-only',
+                                           help='Make target monitor the only '
+                                                'one on')
+parser_enable_only.add_argument('target', type=int, help=TARGET_HELP)
+
 args = parser.parse_args()
 
 
@@ -107,8 +130,6 @@ sorted_monitors = sorted(monitors.values(), key=lambda x: x.pos)
 for i, monitor in enumerate(sorted_monitors):
     monitor.rank = i + 1
 
-target = sorted_monitors[args.target - 1]
-
 
 def print_monitors(monitors):
     """ Print info about each monitor """
@@ -153,13 +174,18 @@ def filter_out_disconnected(monitors):
     return [mon for mon in sorted_monitors if mon.is_connected]
 
 
-if args.action == 'toggle':
+try:
+    target = sorted_monitors[args.target - 1]
+except AttributeError:
+    target = None
+
+if args.subparser == 'toggle':
     target.is_connected = not target.is_connected
-elif args.action == 'enable':
+elif args.subparser == 'enable':
     target.is_connected = True
-elif args.action == 'disable':
+elif args.subparser == 'disable':
     target.is_connected = False
-elif args.action == 'toggle-only':
+elif args.subparser == 'toggle-only':
     if (
         not target.is_connected
         or len(filter_out_disconnected(sorted_monitors)) > 1
@@ -167,12 +193,13 @@ elif args.action == 'toggle-only':
         only_target(sorted_monitors, target)
     else:
         enable_all(sorted_monitors)
-elif args.action == 'enable-only':
+elif args.subparser == 'enable-only':
     only_target(sorted_monitors, target)
 
-connected_monitors = filter_out_disconnected(sorted_monitors)
-recalculate_positions(connected_monitors)
-apply_changes(connected_monitors)
+if target is not None:
+    connected_monitors = filter_out_disconnected(sorted_monitors)
+    recalculate_positions(connected_monitors)
+    apply_changes(connected_monitors)
 
 if args.status:
     print_monitors(sorted_monitors)
