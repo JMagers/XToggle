@@ -175,7 +175,11 @@ def filter_out_disconnected(monitors):
 
 
 try:
-    target = sorted_monitors[args.target - 1]
+    if 0 < args.target <= len(sorted_monitors):
+        target = sorted_monitors[args.target - 1]
+    else:
+        sys.exit("Target must be a number between 1 and the number of "
+                 "monitors configured!")
 except AttributeError:
     target = None
 
