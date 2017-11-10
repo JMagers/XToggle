@@ -96,14 +96,14 @@ except FileNotFoundError:
 
 # Get width of each monitor
 tree = ET.parse(MONITORS_XML)
-for output_tag in tree.findall('.//configuration/output'):
+for monitor_tag in tree.findall('.//configuration/logicalmonitor/monitor'):
+    name = monitor_tag.find('monitorspec/connector').text
     try:
-        name = output_tag.attrib['name']
         monitor = monitors[name]
     except KeyError:
         continue
     try:
-        monitor.width = int(output_tag.find('width').text)
+        monitor.width = int(monitor_tag.find('mode/width').text)
     except AttributeError:
         sys.exit("Monitor, '%s', has no width tag in '%s'!"
                  % (name, MONITORS_XML))
