@@ -81,7 +81,7 @@ monitors = {}
 try:
     with open(CONFIG_PATH, 'r') as conf:
         for line in conf:
-            settings_match = re.search(r'Option\s+"metamodes"\s*"(.+)"', line)
+            settings_match = re.search(r'Option\s+"metamodes"\s*"(.+?)"', line)
             try:
                 settings_string = settings_match.group(1)
             except AttributeError:
