@@ -10,9 +10,15 @@ import xml.etree.ElementTree as ET
 # Constants
 XORG_CONF = '/etc/X11/xorg.conf'
 MONITORS_XML = os.path.join(os.environ['HOME'], '.config', 'monitors.xml')
+XRANDR = 'xrandr'
+NVIDIA = 'nvidia'
 
 # Arguments
 parser = argparse.ArgumentParser()
+parser.add_argument('--nvidia', '-n',
+                    action='store_true',
+                    help='use nvidia_settings instead of xrandr to apply '
+                         'changes (%s must be configured)' % XORG_CONF)
 parser.add_argument('--verbose', '-v',
                     action='store_true',
                     help='print the command used to apply the settings '
@@ -55,20 +61,24 @@ args = parser.parse_args()
 
 
 class Monitor:
-    def __init__(self, command):
-        self._command = command.strip()
-        self.name = command.split(':')[0].strip()
+    def __init__(self):
+        self.name = None
         self.xpos = None
         self.ypos = None
         self.rank = None
         self.width = None
         self.height = None
         self.is_enabled = None
+        self.nvidia_settings = None
 
-    def get_command(self):
-        command_split = self._command.split('+')
-        command_split[1] = str(self.xpos)
-        return '+'.join(command_split)
+    def get_new_nvidia_settings(self):
+        """
+        Return nvidia_settings where original xpos is replaced with newly
+        calculated value
+        """
+        settings_split = self.nvidia_settings.split('+')
+        settings_split[1] = str(self.xpos)
+        return '+'.join(settings_split)
 
     def print_info(self):
         if self.is_enabled:
@@ -78,21 +88,51 @@ class Monitor:
         print("%s %s %d" % (self.name, connected_status, self.rank))
 
 
-# Parse nvidia xorg config file for monitor info
+# Get all connected monitors
+monitor_info = subprocess.check_output(['xrandr', '-q'],
+                                       universal_newlines=True)
+connected_re = re.compile(r'^(?P<name>\S+) connected (?:primary )?'
+                          r'(?P<other>.*)')
+enabled_re = re.compile(r'^\d+x\d+\+\d+\+\d+')
 monitors = {}
+for line in monitor_info.splitlines():
+    monitor = Monitor()
+    connected_match = re.match(connected_re, line)
+    try:
+        monitor.name = connected_match.group('name')
+    except AttributeError:
+        continue
+    enabled_match = re.match(enabled_re, connected_match.group('other'))
+    monitor.is_enabled = bool(enabled_match)
+    monitors[monitor.name] = monitor
+
+# Parse nvidia xorg config file for metamodes settings
+found_monitors = set()
 try:
     with open(XORG_CONF, 'r') as conf:
         for line in conf:
             settings_match = re.search(r'Option\s+"metamodes"\s*"(.+?)"', line)
             try:
-                settings_string = settings_match.group(1)
+                monitors_settings_str = settings_match.group(1)
             except AttributeError:
                 continue
-            for monitor_string in settings_string.split(','):
-                monitor = Monitor(monitor_string)
-                monitors[monitor.name] = monitor
+            for monitor_settings_str in monitors_settings_str.split(','):
+                try:
+                    name = monitor_settings_str.split(':')[0].strip()
+                except IndexError:
+                    sys.exit("Missing monitor name in '%s' metamodes!"
+                             % XORG_CONF)
+                try:
+                    monitors[name].nvidia_settings = monitor_settings_str
+                except KeyError:
+                    sys.exit("'%s' metamodes contains a disconnected monitor!"
+                             % XORG_CONF)
+                if name in found_monitors:
+                    sys.exit("'%s' metamodes contains multiple entries for ",
+                             "monitor '%s'!" % (XORG_CONF, name))
+                found_monitors.add(monitor.name)
         if not monitors:
-            sys.exit("No monitors found!")
+            sys.exit("No monitors found in '%s' metamodes!" % XORG_CONF)
 except FileNotFoundError:
     sys.exit("'%s' does not exist!" % XORG_CONF)
 
@@ -133,14 +173,6 @@ for name, monitor in monitors.items():
         sys.exit("Could not find info for monitor, '%s', in '%s'!"
                  % (name, MONITORS_XML))
 
-# Find out which monitors are currently enabled
-p = subprocess.run(['xrandr', '-q'],
-                   stdout=subprocess.PIPE,
-                   universal_newlines=True)
-for name, monitor in monitors.items():
-    query = monitor.name + r' connected (primary )?\d+x\d+\+\d+\+\d+'
-    monitor.is_enabled = bool(re.search(query, p.stdout))
-
 # Sort monitors by their positions and apply ranks
 sorted_monitors = sorted(monitors.values(), key=lambda x: x.xpos)
 for i, monitor in enumerate(sorted_monitors):
@@ -167,7 +199,7 @@ def create_nvidia_command(monitors):
     SEP = ', '  # Seperator
     info = ''
     for monitor in filter_out_disabled(monitors):
-        info += monitor.get_command() + SEP
+        info += monitor.get_new_nvidia_settings() + SEP
     return 'nvidia-settings --assign CurrentMetaMode="%s"' % info.strip(SEP)
 
 
@@ -186,30 +218,41 @@ def create_xrandr_command(monitors):
     return 'xrandr ' + ' '.join(monitor_settings)
 
 
-def apply_changes(monitors):
-    """ Run commands to apply changes """
-    # TODO: Add option to use xrandr instead
-    command = create_nvidia_command(monitors)
+def apply_changes(monitors, manager):
+    """
+    Run commands with specified manager to apply changes.
+    Manager can be 'xrandr' or 'nvidia'.
+    """
+    if manager == XRANDR:
+        command = create_xrandr_command(monitors)
+    elif manager == NVIDIA:
+        command = create_nvidia_command(monitors)
+    else:
+        raise "Incorrect manager specified. Must be 'xrandr' or 'nvidia'"
     subprocess.run(command, stdout=subprocess.DEVNULL, shell=True)
     if args.verbose:
         print(command)
 
 
 def only_target(monitors, target):
+    """ Enable target monitor and disable others """
     for monitor in monitors:
         monitor.is_enabled = False
     target.is_enabled = True
 
 
 def enable_all(monitors):
+    """ Enable all monitors """
     for monitor in monitors:
         monitor.is_enabled = True
 
 
 def filter_out_disabled(monitors):
+    """ Return a new list of all enabled monitors """
     return [mon for mon in sorted_monitors if mon.is_enabled]
 
 
+# Check if args.target is acceptable
 try:
     if 0 < args.target <= len(sorted_monitors):
         target = sorted_monitors[args.target - 1]
@@ -219,6 +262,7 @@ try:
 except AttributeError:
     target = None
 
+# Apply actions specific to chosen subparser
 if args.subparser == 'toggle':
     target.is_enabled = not target.is_enabled
 elif args.subparser == 'enable':
@@ -238,7 +282,8 @@ elif args.subparser == 'enable-only':
 
 if target is not None:
     recalculate_positions(sorted_monitors)
-    apply_changes(sorted_monitors)
+    manager = NVIDIA if args.nvidia else XRANDR
+    apply_changes(sorted_monitors, manager)
 
 if args.status:
     print_monitors(sorted_monitors)
