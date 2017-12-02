@@ -107,36 +107,39 @@ for line in monitor_info.splitlines():
     monitors[monitor.name] = monitor
 
 # Parse nvidia xorg config file for metamodes settings
-found_monitors = set()
-try:
-    with open(XORG_CONF, 'r') as conf:
-        for line in conf:
-            settings_match = re.search(r'Option\s+"metamodes"\s*"(.+?)"', line)
-            try:
-                monitors_settings_str = settings_match.group(1)
-            except AttributeError:
-                continue
-            for monitor_settings_str in monitors_settings_str.split(','):
+if args.nvidia:
+    found_monitors = set()
+    try:
+        with open(XORG_CONF, 'r') as conf:
+            for line in conf:
+                settings_match = re.search(r'Option\s+"metamodes"\s*"(.+?)"',
+                                           line)
                 try:
-                    name = monitor_settings_str.split(':')[0].strip()
-                except IndexError:
-                    sys.exit("Missing monitor name in '%s' metamodes!"
-                             % XORG_CONF)
-                try:
-                    monitors[name].nvidia_settings = monitor_settings_str
-                except KeyError:
-                    sys.exit("'%s' metamodes contains a disconnected monitor!"
-                             % XORG_CONF)
-                if name in found_monitors:
-                    sys.exit("'%s' metamodes contains multiple entries for ",
-                             "monitor '%s'!" % (XORG_CONF, name))
-                found_monitors.add(monitor.name)
-        if not monitors:
-            sys.exit("No monitors found in '%s' metamodes!" % XORG_CONF)
-except FileNotFoundError:
-    sys.exit("'%s' does not exist!" % XORG_CONF)
+                    monitors_settings_str = settings_match.group(1)
+                except AttributeError:
+                    continue
+                for monitor_settings_str in monitors_settings_str.split(','):
+                    try:
+                        name = monitor_settings_str.split(':')[0].strip()
+                    except IndexError:
+                        sys.exit("Missing monitor name in '%s' metamodes!"
+                                 % XORG_CONF)
+                    try:
+                        monitors[name].nvidia_settings = monitor_settings_str
+                    except KeyError:
+                        sys.exit("'%s' metamodes contains a disconnected "
+                                 "monitor!" % XORG_CONF)
+                    if name in found_monitors:
+                        sys.exit("'%s' metamodes contains multiple entries ",
+                                 "for monitor '%s'!" % (XORG_CONF, name))
+                    found_monitors.add(monitor.name)
+            if not monitors:
+                sys.exit("No monitors found in '%s' metamodes!" % XORG_CONF)
+    except FileNotFoundError:
+        sys.exit("'%s' does not exist!" % XORG_CONF)
 
-# Get dimensions and position of each monitor
+# Get dimensions, position, and primary status of each monitor
+original_primary = None
 tree = ET.parse(MONITORS_XML)
 for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
     name = monitor_tag.find('monitor/monitorspec/connector').text
@@ -156,6 +159,13 @@ for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
         sys.exit("Width/height tag for monitor, '%s', in '%s' is not an "
                  "integer!" % (name, MONITORS_XML))
 
+    # Get primary status
+    try:
+        primary_status = monitor_tag.find('primary').text
+        original_primary = monitor if primary_status == 'yes' else None
+    except AttributeError:
+        pass
+
     # Get position
     try:
         monitor.xpos = int(monitor_tag.find('x').text)
@@ -167,7 +177,9 @@ for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
         sys.exit("x/y position tags for monitor, '%s', in '%s' are not "
                  "integers!" % (name, MONITORS_XML))
 
-# Check that all monitor dimensions and positions were found
+# Check that all monitor information was found
+if original_primary is None:
+    sys.exit("No primary monitor specified in %s" % MONITORS_XML)
 for name, monitor in monitors.items():
     if None in (monitor.width, monitor.height, monitor.xpos):
         sys.exit("Could not find info for monitor, '%s', in '%s'!"
@@ -205,13 +217,19 @@ def create_nvidia_command(monitors):
 
 def create_xrandr_command(monitors):
     """ Generate xrandr command to apply changes to monitors """
+    if original_primary.is_enabled:
+        new_primary = original_primary
+    else:
+        new_primary = filter_out_disabled(monitors)[0]
+
     monitor_settings = []
     for monitor in monitors:
         output = '--output %s' % monitor.name
         if monitor.is_enabled:
             mode = '--mode %dx%d' % (monitor.width, monitor.height)
             pos = '--pos %dx%d' % (monitor.xpos, monitor.ypos)
-            monitor_setting = ' '.join([output, mode, pos])
+            primary = '--primary' if monitor is new_primary else ''
+            monitor_setting = ' '.join([output, mode, pos, primary])
         else:
             monitor_setting = output + ' --off'
         monitor_settings.append(monitor_setting)
@@ -223,12 +241,17 @@ def apply_changes(monitors, manager):
     Run commands with specified manager to apply changes.
     Manager can be 'xrandr' or 'nvidia'.
     """
+    if not filter_out_disabled(monitors):
+        sys.exit("At least one enabled monitor is required!")
+
     if manager == XRANDR:
         command = create_xrandr_command(monitors)
     elif manager == NVIDIA:
         command = create_nvidia_command(monitors)
     else:
-        raise "Incorrect manager specified. Must be 'xrandr' or 'nvidia'"
+        raise ValueError("Incorrect manager specified. "
+                         "Must be '%s' or '%s'" % (XRANDR, NVIDIA))
+
     subprocess.run(command, stdout=subprocess.DEVNULL, shell=True)
     if args.verbose:
         print(command)
