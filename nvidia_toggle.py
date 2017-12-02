@@ -58,14 +58,16 @@ class Monitor:
     def __init__(self, command):
         self._command = command.strip()
         self.name = command.split(':')[0].strip()
-        self.pos = int(command.split('+')[1])
+        self.xpos = None
+        self.ypos = None
         self.rank = None
         self.width = None
+        self.height = None
         self.is_connected = None
 
     def get_command(self):
         command_split = self._command.split('+')
-        command_split[1] = str(self.pos)
+        command_split[1] = str(self.xpos)
         return '+'.join(command_split)
 
     def print_info(self):
@@ -94,26 +96,40 @@ try:
 except FileNotFoundError:
     sys.exit("'%s' does not exist!" % CONFIG_PATH)
 
-# Get width of each monitor
+# Get dimensions and position of each monitor
 tree = ET.parse(MONITORS_XML)
-for monitor_tag in tree.findall('.//configuration/logicalmonitor/monitor'):
-    name = monitor_tag.find('monitorspec/connector').text
+for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
+    name = monitor_tag.find('monitor/monitorspec/connector').text
     try:
         monitor = monitors[name]
     except KeyError:
         continue
+
+    # Get dimensions
     try:
-        monitor.width = int(monitor_tag.find('mode/width').text)
+        monitor.width = int(monitor_tag.find('monitor/mode/width').text)
+        monitor.height = int(monitor_tag.find('monitor/mode/height').text)
     except AttributeError:
-        sys.exit("Monitor, '%s', has no width tag in '%s'!"
+        sys.exit("Monitor, '%s', has no width/height tag in '%s'!"
                  % (name, MONITORS_XML))
     except ValueError:
-        sys.exit("Width tag for monitor, '%s', in '%s' is not an integer!"
-                 % (name, MONITORS_XML))
+        sys.exit("Width/height tag for monitor, '%s', in '%s' is not an "
+                 "integer!" % (name, MONITORS_XML))
 
-# Check that all monitor widths were found
+    # Get position
+    try:
+        monitor.xpos = int(monitor_tag.find('x').text)
+        monitor.ypos = int(monitor_tag.find('y').text)
+    except AttributeError:
+        sys.exit("Monitor, '%s', is missing x/y positions in '%s'!"
+                 % (name, MONITORS_XML))
+    except ValueError:
+        sys.exit("x/y position tags for monitor, '%s', in '%s' are not "
+                 "integers!" % (name, MONITORS_XML))
+
+# Check that all monitor dimensions and positions were found
 for name, monitor in monitors.items():
-    if monitor.width is None:
+    if None in (monitor.width, monitor.height, monitor.xpos):
         sys.exit("Could not find info for monitor, '%s', in '%s'!"
                  % (name, MONITORS_XML))
 
@@ -126,7 +142,7 @@ for name, monitor in monitors.items():
     monitor.is_connected = bool(re.search(query, p.stdout))
 
 # Sort monitors by their positions and apply ranks
-sorted_monitors = sorted(monitors.values(), key=lambda x: x.pos)
+sorted_monitors = sorted(monitors.values(), key=lambda x: x.xpos)
 for i, monitor in enumerate(sorted_monitors):
     monitor.rank = i + 1
 
@@ -141,19 +157,39 @@ def print_monitors(monitors):
 def recalculate_positions(monitors):
     """ Recalculate positions of monitors based on widths and order of list """
     total_width = 0
-    for monitor in monitors:
-        monitor.pos = total_width
+    for monitor in filter_out_disconnected(monitors):
+        monitor.xpos = total_width
         total_width += monitor.width
 
 
-def apply_changes(monitors):
-    """ Run nvidia command to apply changes """
+def create_nvidia_command(monitors):
+    """ Generate nvidia command to apply changes to monitors """
     SEP = ', '  # Seperator
     info = ''
+    for monitor in filter_out_disconnected(monitors):
+        info += monitor.get_command() + SEP
+    return 'nvidia-settings --assign CurrentMetaMode="%s"' % info.strip(SEP)
+
+
+def create_xrandr_command(monitors):
+    """ Generate xrandr command to apply changes to monitors """
+    monitor_settings = []
     for monitor in monitors:
+        output = '--output %s' % monitor.name
         if monitor.is_connected:
-            info += monitor.get_command() + SEP
-    command = 'nvidia-settings --assign CurrentMetaMode="%s"' % info.strip(SEP)
+            mode = '--mode %dx%d' % (monitor.width, monitor.height)
+            pos = '--pos %dx%d' % (monitor.xpos, monitor.ypos)
+            monitor_setting = ' '.join([output, mode, pos])
+        else:
+            monitor_setting = output + ' --off'
+        monitor_settings.append(monitor_setting)
+    return 'xrandr ' + ' '.join(monitor_settings)
+
+
+def apply_changes(monitors):
+    """ Run commands to apply changes """
+    # TODO: Add option to use xrandr instead
+    command = create_nvidia_command(monitors)
     subprocess.run(command, stdout=subprocess.DEVNULL, shell=True)
     if args.verbose:
         print(command)
@@ -201,9 +237,8 @@ elif args.subparser == 'enable-only':
     only_target(sorted_monitors, target)
 
 if target is not None:
-    connected_monitors = filter_out_disconnected(sorted_monitors)
-    recalculate_positions(connected_monitors)
-    apply_changes(connected_monitors)
+    recalculate_positions(sorted_monitors)
+    apply_changes(sorted_monitors)
 
 if args.status:
     print_monitors(sorted_monitors)
