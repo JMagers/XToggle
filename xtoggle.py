@@ -53,7 +53,7 @@ parser_toggle_only.add_argument('target', type=int, help=TARGET_HELP)
 
 # Enable-only command
 parser_enable_only = subparsers.add_parser('enable-only',
-                                           help='Make target monitor the only '
+                                           help='make target monitor the only '
                                                 'one on')
 parser_enable_only.add_argument('target', type=int, help=TARGET_HELP)
 
