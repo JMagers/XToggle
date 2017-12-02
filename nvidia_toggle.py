@@ -133,12 +133,15 @@ if args.nvidia:
                     found_monitors.add(monitor.name)
             if not monitors:
                 sys.exit("No monitors found in '%s' metamodes!" % XORG_CONF)
-    except FileNotFoundError:
-        sys.exit("'%s' does not exist!" % XORG_CONF)
+    except IOError:
+        sys.exit("'%s' does not exist or could not be read!" % XORG_CONF)
 
 # Get dimensions, position, and primary status of each monitor
 original_primary = None
-tree = ET.parse(MONITORS_XML)
+try:
+    tree = ET.parse(MONITORS_XML)
+except IOError:
+    sys.exit("'%s' does not exist or could not be read!" % MONITORS_XML)
 for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
     name = monitor_tag.find('monitor/monitorspec/connector').text
     try:
