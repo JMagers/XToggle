@@ -8,7 +8,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 # Constants
-CONFIG_PATH = '/etc/X11/xorg.conf'
+XORG_CONF = '/etc/X11/xorg.conf'
 MONITORS_XML = os.path.join(os.environ['HOME'], '.config', 'monitors.xml')
 
 # Arguments
@@ -63,7 +63,7 @@ class Monitor:
         self.rank = None
         self.width = None
         self.height = None
-        self.is_connected = None
+        self.is_enabled = None
 
     def get_command(self):
         command_split = self._command.split('+')
@@ -71,17 +71,17 @@ class Monitor:
         return '+'.join(command_split)
 
     def print_info(self):
-        if self.is_connected:
+        if self.is_enabled:
             connected_status = 'ON'
         else:
             connected_status = 'OFF'
         print("%s %s %d" % (self.name, connected_status, self.rank))
 
 
-# Parse config file for monitor info
+# Parse nvidia xorg config file for monitor info
 monitors = {}
 try:
-    with open(CONFIG_PATH, 'r') as conf:
+    with open(XORG_CONF, 'r') as conf:
         for line in conf:
             settings_match = re.search(r'Option\s+"metamodes"\s*"(.+?)"', line)
             try:
@@ -94,7 +94,7 @@ try:
         if not monitors:
             sys.exit("No monitors found!")
 except FileNotFoundError:
-    sys.exit("'%s' does not exist!" % CONFIG_PATH)
+    sys.exit("'%s' does not exist!" % XORG_CONF)
 
 # Get dimensions and position of each monitor
 tree = ET.parse(MONITORS_XML)
@@ -133,13 +133,13 @@ for name, monitor in monitors.items():
         sys.exit("Could not find info for monitor, '%s', in '%s'!"
                  % (name, MONITORS_XML))
 
-# Find out which monitors are currently connected
+# Find out which monitors are currently enabled
 p = subprocess.run(['xrandr', '-q'],
                    stdout=subprocess.PIPE,
                    universal_newlines=True)
 for name, monitor in monitors.items():
     query = monitor.name + r' connected (primary )?\d+x\d+\+\d+\+\d+'
-    monitor.is_connected = bool(re.search(query, p.stdout))
+    monitor.is_enabled = bool(re.search(query, p.stdout))
 
 # Sort monitors by their positions and apply ranks
 sorted_monitors = sorted(monitors.values(), key=lambda x: x.xpos)
@@ -157,7 +157,7 @@ def print_monitors(monitors):
 def recalculate_positions(monitors):
     """ Recalculate positions of monitors based on widths and order of list """
     total_width = 0
-    for monitor in filter_out_disconnected(monitors):
+    for monitor in filter_out_disabled(monitors):
         monitor.xpos = total_width
         total_width += monitor.width
 
@@ -166,7 +166,7 @@ def create_nvidia_command(monitors):
     """ Generate nvidia command to apply changes to monitors """
     SEP = ', '  # Seperator
     info = ''
-    for monitor in filter_out_disconnected(monitors):
+    for monitor in filter_out_disabled(monitors):
         info += monitor.get_command() + SEP
     return 'nvidia-settings --assign CurrentMetaMode="%s"' % info.strip(SEP)
 
@@ -176,7 +176,7 @@ def create_xrandr_command(monitors):
     monitor_settings = []
     for monitor in monitors:
         output = '--output %s' % monitor.name
-        if monitor.is_connected:
+        if monitor.is_enabled:
             mode = '--mode %dx%d' % (monitor.width, monitor.height)
             pos = '--pos %dx%d' % (monitor.xpos, monitor.ypos)
             monitor_setting = ' '.join([output, mode, pos])
@@ -197,17 +197,17 @@ def apply_changes(monitors):
 
 def only_target(monitors, target):
     for monitor in monitors:
-        monitor.is_connected = False
-    target.is_connected = True
+        monitor.is_enabled = False
+    target.is_enabled = True
 
 
 def enable_all(monitors):
     for monitor in monitors:
-        monitor.is_connected = True
+        monitor.is_enabled = True
 
 
-def filter_out_disconnected(monitors):
-    return [mon for mon in sorted_monitors if mon.is_connected]
+def filter_out_disabled(monitors):
+    return [mon for mon in sorted_monitors if mon.is_enabled]
 
 
 try:
@@ -220,15 +220,15 @@ except AttributeError:
     target = None
 
 if args.subparser == 'toggle':
-    target.is_connected = not target.is_connected
+    target.is_enabled = not target.is_enabled
 elif args.subparser == 'enable':
-    target.is_connected = True
+    target.is_enabled = True
 elif args.subparser == 'disable':
-    target.is_connected = False
+    target.is_enabled = False
 elif args.subparser == 'toggle-only':
     if (
-        not target.is_connected
-        or len(filter_out_disconnected(sorted_monitors)) > 1
+        not target.is_enabled
+        or len(filter_out_disabled(sorted_monitors)) > 1
     ):
         only_target(sorted_monitors, target)
     else:
