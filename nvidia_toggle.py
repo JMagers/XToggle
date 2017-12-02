@@ -81,11 +81,9 @@ class Monitor:
         return '+'.join(settings_split)
 
     def print_info(self):
-        if self.is_enabled:
-            connected_status = 'ON'
-        else:
-            connected_status = 'OFF'
-        print("%s %s %d" % (self.name, connected_status, self.rank))
+        connected_status = 'ON' if self.is_enabled else 'OFF'
+        print("%s, connection: %s, position: %d"
+              % (self.name, connected_status, self.rank))
 
 
 # Get all connected monitors
@@ -193,9 +191,8 @@ for i, monitor in enumerate(sorted_monitors):
 
 def print_monitors(monitors):
     """ Print info about each monitor """
-    for monitor in monitors:
+    for i, monitor in enumerate(monitors):
         monitor.print_info()
-        print()
 
 
 def recalculate_positions(monitors):
