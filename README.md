@@ -35,12 +35,12 @@ Toggle wheather or not your second monitor is the only one on
 ```
 
 ## Nvidia Users
-If you need the settings in your /etc/X11/xorg.conf file to take effect then you can choose to have your settings changed via "nvidia-settings" by using the --nvidia flag. This is useful if you have settings specific to nvidia like "ForceCompositionPipeline = On".
+If you need the "metamodes" settings in your /etc/X11/xorg.conf file to take effect then you can choose to have your displays changed via nvidia-settings instead of xrandr by using the --nvidia/-n flag. This is useful if you have settings specific to nvidia like "ForceCompositionPipeline = On".
 
 Example:
 
 ```
-./xtoggle.py --nvidia enable-only 2
+./xtoggle.py -n enable-only 2
 ```
 
 ## Best Practices
