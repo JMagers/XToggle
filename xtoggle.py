@@ -212,6 +212,12 @@ for i, monitor in enumerate(sorted_monitors):
     monitor.rank = i + 1
 
 
+def get_new_primary(monitors, original_primary):
+    if original_primary.is_enabled:
+        return original_primary
+    return filter_out_disabled(monitors)[0]
+
+
 def print_monitors(monitors):
     """ Print info about each monitor """
     for i, monitor in enumerate(monitors):
@@ -226,7 +232,7 @@ def recalculate_positions(monitors):
         total_width += monitor.width
 
 
-def create_nvidia_command(monitors):
+def create_nvidia_command(monitors, primary):
     """ Generate nvidia command to apply changes to monitors """
     METAMODES_SEP = ', '
     all_metamodes = []
@@ -235,32 +241,28 @@ def create_nvidia_command(monitors):
     args = (
         'nvidia-settings',
         '--assign CurrentMetaMode="%s"' % METAMODES_SEP.join(all_metamodes),
+        '--assign XineramaInfoOrder="%s"' % primary.name,
     )
     return ' '.join(args)
 
 
-def create_xrandr_command(monitors):
+def create_xrandr_command(monitors, primary):
     """ Generate xrandr command to apply changes to monitors """
-    if original_primary.is_enabled:
-        new_primary = original_primary
-    else:
-        new_primary = filter_out_disabled(monitors)[0]
-
     monitor_settings = []
     for monitor in monitors:
         output = '--output %s' % monitor.name
         if monitor.is_enabled:
             mode = '--mode %dx%d' % (monitor.width, monitor.height)
             pos = '--pos %dx%d' % (monitor.xpos, monitor.ypos)
-            primary = '--primary' if monitor is new_primary else ''
-            monitor_setting = ' '.join([output, mode, pos, primary])
+            primary_opt = '--primary' if monitor is primary else ''
+            monitor_setting = ' '.join([output, mode, pos, primary_opt])
         else:
             monitor_setting = output + ' --off'
         monitor_settings.append(monitor_setting)
     return 'xrandr ' + ' '.join(monitor_settings)
 
 
-def apply_changes(monitors, manager):
+def apply_changes(monitors, primary, manager):
     """
     Run commands with specified manager to apply changes.
     Manager can be 'xrandr' or 'nvidia'.
@@ -269,9 +271,9 @@ def apply_changes(monitors, manager):
         sys.exit("At least one enabled monitor is required!")
 
     if manager == XRANDR:
-        command = create_xrandr_command(monitors)
+        command = create_xrandr_command(monitors, primary)
     elif manager == NVIDIA:
-        command = create_nvidia_command(monitors)
+        command = create_nvidia_command(monitors, primary)
     else:
         raise ValueError("Incorrect manager specified. "
                          "Must be '%s' or '%s'" % (XRANDR, NVIDIA))
@@ -338,7 +340,8 @@ elif args.subparser == 'enable-only':
 if target is not None:
     recalculate_positions(sorted_monitors)
     manager = NVIDIA if args.nvidia else XRANDR
-    apply_changes(sorted_monitors, manager)
+    new_primary = get_new_primary(monitors, original_primary)
+    apply_changes(sorted_monitors, new_primary, manager)
 
 if args.status:
     print_monitors(sorted_monitors)
