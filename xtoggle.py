@@ -17,7 +17,7 @@ NVIDIA = 'nvidia'
 parser = argparse.ArgumentParser()
 parser.add_argument('--nvidia', '-n',
                     action='store_true',
-                    help='use nvidia_settings instead of xrandr to apply '
+                    help='use nvidia-settings instead of xrandr to apply '
                          'changes (%s must be configured)' % XORG_CONF)
 parser.add_argument('--verbose', '-v',
                     action='store_true',
@@ -69,16 +69,16 @@ class Monitor:
         self.width = None
         self.height = None
         self.is_enabled = None
-        self.nvidia_settings = None
+        self.metamodes = None
 
-    def get_new_nvidia_settings(self):
+    def get_new_metamodes(self):
         """
-        Return nvidia_settings where original xpos is replaced with newly
+        Return metamodes where original xpos is replaced with newly
         calculated value
         """
-        settings_split = self.nvidia_settings.split('+')
-        settings_split[1] = str(self.xpos)
-        return '+'.join(settings_split)
+        metamodes_split = self.metamodes.split('+')
+        metamodes_split[1] = str(self.xpos)
+        return '+'.join(metamodes_split)
 
     def print_info(self):
         connected_status = 'ON' if self.is_enabled else 'OFF'
@@ -129,21 +129,21 @@ if args.nvidia:
     found_monitors = set()
     try:
         with open(XORG_CONF, 'r') as conf:
+            all_metamodes_re = re.compile(r'Option\s+"metamodes"\s*"(.+?)"')
             for line in conf:
-                settings_match = re.search(r'Option\s+"metamodes"\s*"(.+?)"',
-                                           line)
+                all_metamodes_match = re.search(all_metamodes_re, line)
                 try:
-                    monitors_settings_str = settings_match.group(1)
+                    all_metamodes_str = all_metamodes_match.group(1)
                 except AttributeError:
                     continue
-                for monitor_settings_str in monitors_settings_str.split(','):
+                for metamodes_str in all_metamodes_str.split(','):
                     try:
-                        name = monitor_settings_str.split(':')[0].strip()
+                        name = metamodes_str.split(':')[0].strip()
                     except IndexError:
                         sys.exit("Missing monitor name in '%s' metamodes!"
                                  % XORG_CONF)
                     try:
-                        monitors[name].nvidia_settings = monitor_settings_str
+                        monitors[name].metamodes = metamodes_str.strip()
                     except KeyError:
                         sys.exit("'%s' metamodes contains a disconnected "
                                  "monitor!" % XORG_CONF)
@@ -228,11 +228,15 @@ def recalculate_positions(monitors):
 
 def create_nvidia_command(monitors):
     """ Generate nvidia command to apply changes to monitors """
-    SEP = ', '  # Seperator
-    info = ''
+    METAMODES_SEP = ', '
+    all_metamodes = []
     for monitor in filter_out_disabled(monitors):
-        info += monitor.get_new_nvidia_settings() + SEP
-    return 'nvidia-settings --assign CurrentMetaMode="%s"' % info.strip(SEP)
+        all_metamodes.append(monitor.get_new_metamodes())
+    args = (
+        'nvidia-settings',
+        '--assign CurrentMetaMode="%s"' % METAMODES_SEP.join(all_metamodes),
+    )
+    return ' '.join(args)
 
 
 def create_xrandr_command(monitors):
