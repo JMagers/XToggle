@@ -97,6 +97,10 @@ def command_available(command):
     return True
 
 
+# Check that system meets requirements
+session_type = subprocess.check_output('printf $XDG_SESSION_TYPE', shell=True)
+if session_type != b'x11':
+    sys.exit("Xorg is not being used!")
 if not command_available(['xrandr', '-v']):
     sys.exit("xrandr is not installed or could not be run!")
 if args.nvidia and not command_available(['nvidia-settings', '-v']):
