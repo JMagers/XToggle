@@ -1,13 +1,16 @@
 # XToggle
 Easily toggle the state of your individual monitors in your multi-monitor setup between enabled and disabled.
-## Supported Distros
-Tested on Ubuntu 17.10
 ## Dependencies
+GNOME 3.26
+
 Python 3.5+
 
 Must be using X.Org and not Wayland
+
+~/.config/monitors.xml must be generated (automatically done after making any changes to display settings)
 ## Usage
 Monitors are identified by numbers starting from 1 to N where N is the number of connected monitors. Monitors are given their id based on their horizontal positions in your workspace (leftmost monitor is 1, next to the right is 2, etc...).
+
 Examples:
 
 Toggle the state of the monitor at position 1
