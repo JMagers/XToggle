@@ -86,6 +86,22 @@ class Monitor:
               % (self.name, connected_status, self.rank))
 
 
+def command_available(command):
+    """ Return wheather or not the given command could be run """
+    try:
+        subprocess.run(command,
+                       stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+    except (FileNotFoundError, PermissionError):
+        return False
+    return True
+
+
+if not command_available(['xrandr', '-v']):
+    sys.exit("xrandr is not installed or could not be run!")
+if args.nvidia and not command_available(['nvidia-settings', '-v']):
+    sys.exit("nvidia-settings is not installed or could not be run!")
+
 # Get all connected monitors
 monitor_info = subprocess.check_output(['xrandr', '-q'],
                                        universal_newlines=True)
@@ -252,7 +268,15 @@ def apply_changes(monitors, manager):
         raise ValueError("Incorrect manager specified. "
                          "Must be '%s' or '%s'" % (XRANDR, NVIDIA))
 
-    subprocess.run(command, stdout=subprocess.DEVNULL, shell=True)
+    try:
+        subprocess.run(command,
+                       stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL,
+                       check=True,
+                       shell=True)
+    except subprocess.CalledProcessError:
+        sys.exit("The following command returned non-zero exit status:\n%s"
+                 % command)
     if args.verbose:
         print(command)
 
