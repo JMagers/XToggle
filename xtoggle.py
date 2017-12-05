@@ -199,12 +199,15 @@ for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
                  "integers!" % (name, MONITORS_XML))
 
 # Check that all monitor information was found
-if original_primary is None:
-    sys.exit("No primary monitor specified in %s" % MONITORS_XML)
 for name, monitor in monitors.items():
     if None in (monitor.width, monitor.height, monitor.xpos):
         sys.exit("Could not find info for monitor, '%s', in '%s'!"
                  % (name, MONITORS_XML))
+if original_primary is None:
+    print("No connected monitor is designated as the primary monitor in %s!\n"
+          "The first enabled monitor will be used as the primary."
+          % MONITORS_XML,
+          file=sys.stderr)
 
 # Sort monitors by their positions and apply ranks
 sorted_monitors = sorted(monitors.values(), key=lambda x: x.xpos)
@@ -213,7 +216,7 @@ for i, monitor in enumerate(sorted_monitors):
 
 
 def get_new_primary(monitors, original_primary):
-    if original_primary.is_enabled:
+    if original_primary and original_primary.is_enabled:
         return original_primary
     return filter_out_disabled(monitors)[0]
 
