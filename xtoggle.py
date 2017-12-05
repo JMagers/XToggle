@@ -330,13 +330,10 @@ elif args.subparser == 'enable':
 elif args.subparser == 'disable':
     target.is_enabled = False
 elif args.subparser == 'toggle-only':
-    if (
-        not target.is_enabled
-        or len(filter_out_disabled(sorted_monitors)) > 1
-    ):
-        only_target(sorted_monitors, target)
-    else:
+    if target.is_enabled and len(filter_out_disabled(sorted_monitors)) == 1:
         enable_all(sorted_monitors)
+    else:
+        only_target(sorted_monitors, target)
 elif args.subparser == 'enable-only':
     only_target(sorted_monitors, target)
 
