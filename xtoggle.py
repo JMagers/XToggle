@@ -218,7 +218,7 @@ for i, monitor in enumerate(sorted_monitors):
 def get_new_primary(monitors, original_primary):
     if original_primary and original_primary.is_enabled:
         return original_primary
-    return filter_out_disabled(monitors)[0]
+    return get_enabled(monitors)[0]
 
 
 def print_monitors(monitors):
@@ -230,7 +230,7 @@ def print_monitors(monitors):
 def recalculate_positions(monitors):
     """ Recalculate positions of monitors based on widths and order of list """
     total_width = 0
-    for monitor in filter_out_disabled(monitors):
+    for monitor in get_enabled(monitors):
         monitor.xpos = total_width
         total_width += monitor.width
 
@@ -239,7 +239,7 @@ def create_nvidia_command(monitors, primary):
     """ Generate nvidia command to apply changes to monitors """
     METAMODES_SEP = ', '
     all_metamodes = []
-    for monitor in filter_out_disabled(monitors):
+    for monitor in get_enabled(monitors):
         all_metamodes.append(monitor.get_new_metamodes())
     args = (
         'nvidia-settings',
@@ -270,7 +270,7 @@ def apply_changes(monitors, primary, manager):
     Run commands with specified manager to apply changes.
     Manager can be 'xrandr' or 'nvidia'.
     """
-    if not filter_out_disabled(monitors):
+    if not get_enabled(monitors):
         sys.exit("At least one enabled monitor is required!")
 
     if manager == XRANDR:
@@ -307,9 +307,9 @@ def enable_all(monitors):
         monitor.is_enabled = True
 
 
-def filter_out_disabled(monitors):
+def get_enabled(monitors):
     """ Return a new list of all enabled monitors """
-    return [mon for mon in sorted_monitors if mon.is_enabled]
+    return [mon for mon in monitors if mon.is_enabled]
 
 
 # Check if args.target is acceptable
@@ -330,7 +330,7 @@ elif args.subparser == 'enable':
 elif args.subparser == 'disable':
     target.is_enabled = False
 elif args.subparser == 'toggle-only':
-    if target.is_enabled and len(filter_out_disabled(sorted_monitors)) == 1:
+    if target.is_enabled and len(get_enabled(sorted_monitors)) == 1:
         enable_all(sorted_monitors)
     else:
         only_target(sorted_monitors, target)
@@ -340,7 +340,7 @@ elif args.subparser == 'enable-only':
 if target is not None:
     recalculate_positions(sorted_monitors)
     manager = NVIDIA if args.nvidia else XRANDR
-    new_primary = get_new_primary(monitors, original_primary)
+    new_primary = get_new_primary(sorted_monitors, original_primary)
     apply_changes(sorted_monitors, new_primary, manager)
 
 if args.status:
