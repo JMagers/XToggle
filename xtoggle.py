@@ -23,39 +23,46 @@ parser.add_argument('--verbose', '-v',
                     action='store_true',
                     help='print the command used to apply the settings '
                          'specified')
-parser.add_argument('--status', '-s',
+STATUS_FLAG_NAMES = ('--status', '-s')
+parser.add_argument(*STATUS_FLAG_NAMES,
                     action='store_true',
                     help='print status of monitors')
-subparsers = parser.add_subparsers(title='commands', dest='subparser')
+actions = parser.add_subparsers(title='actions', dest='action')
 
 TARGET_HELP = ('position of target monitor to apply action to starting at 1 '
                'from left to right')
 
 # Toggle command
-parser_toggle = subparsers.add_parser('toggle', help='toggle target monitor')
+parser_toggle = actions.add_parser('toggle', help='toggle target monitor')
 parser_toggle.add_argument('target', type=int, help=TARGET_HELP)
 
 # Enable command
-parser_enable = subparsers.add_parser('enable', help='enable target monitor')
+parser_enable = actions.add_parser('enable', help='enable target monitor')
 parser_enable.add_argument('target', type=int, help=TARGET_HELP)
 
 # Disable command
-parser_disable = subparsers.add_parser('disable',
-                                       help='disable target monitor')
+parser_disable = actions.add_parser('disable',
+                                    help='disable target monitor')
 parser_disable.add_argument('target', type=int, help=TARGET_HELP)
 
 # Toggle-only command
-parser_toggle_only = subparsers.add_parser('toggle-only',
-                                           help='toggle wheather or not the '
-                                                'target monitor is the only '
-                                                'one on')
+parser_toggle_only = actions.add_parser('toggle-only',
+                                        help='toggle wheather or not the '
+                                             'target monitor is the only '
+                                             'one on')
 parser_toggle_only.add_argument('target', type=int, help=TARGET_HELP)
 
 # Enable-only command
-parser_enable_only = subparsers.add_parser('enable-only',
-                                           help='make target monitor the only '
-                                                'one on')
+parser_enable_only = actions.add_parser('enable-only',
+                                        help='make target monitor the only '
+                                             'one on')
 parser_enable_only.add_argument('target', type=int, help=TARGET_HELP)
+
+# Make actions optional if --status flag is the only argument
+if len(sys.argv) == 2 and sys.argv[1] in STATUS_FLAG_NAMES:
+    actions.required = False
+else:
+    actions.required = True
 
 args = parser.parse_args()
 
@@ -322,19 +329,19 @@ try:
 except AttributeError:
     target = None
 
-# Apply actions specific to chosen subparser
-if args.subparser == 'toggle':
+# Apply chosen action
+if args.action == 'toggle':
     target.is_enabled = not target.is_enabled
-elif args.subparser == 'enable':
+elif args.action == 'enable':
     target.is_enabled = True
-elif args.subparser == 'disable':
+elif args.action == 'disable':
     target.is_enabled = False
-elif args.subparser == 'toggle-only':
+elif args.action == 'toggle-only':
     if target.is_enabled and len(get_enabled(sorted_monitors)) == 1:
         enable_all(sorted_monitors)
     else:
         only_target(sorted_monitors, target)
-elif args.subparser == 'enable-only':
+elif args.action == 'enable-only':
     only_target(sorted_monitors, target)
 
 if target is not None:
