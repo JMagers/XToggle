@@ -318,7 +318,7 @@ def apply_changes(command):
                  % command)
 
 
-def only_target(monitors, target):
+def enable_only_target(monitors, target):
     """ Enable target monitor and disable others """
     for monitor in monitors:
         monitor.is_enabled = False
@@ -359,9 +359,9 @@ elif args.action == 'toggle-only':
     if target.is_enabled and len(get_enabled(sorted_monitors)) == 1:
         enable_all(sorted_monitors)
     else:
-        only_target(sorted_monitors, target)
+        enable_only_target(sorted_monitors, target)
 elif args.action == 'enable-only':
-    only_target(sorted_monitors, target)
+    enable_only_target(sorted_monitors, target)
 
 if args.action is not None:
     recalculate_positions(sorted_monitors)
