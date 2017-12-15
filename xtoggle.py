@@ -21,8 +21,11 @@ parser.add_argument('--nvidia', '-n',
                          'changes (%s must be configured)' % XORG_CONF)
 parser.add_argument('--verbose', '-v',
                     action='store_true',
-                    help='print the command used to apply the settings '
+                    help='print the command used to apply the changes '
                          'specified')
+parser.add_argument('--norun',
+                    action='store_true',
+                    help='like --verbose but changes will not be applied')
 STATUS_FLAG_NAMES = ('--status', '-s')
 parser.add_argument(*STATUS_FLAG_NAMES,
                     action='store_true',
@@ -272,22 +275,25 @@ def create_xrandr_command(monitors, primary):
     return 'xrandr ' + ' '.join(monitor_settings)
 
 
-def apply_changes(monitors, primary, manager):
+def create_command(monitors, primary, manager):
     """
-    Run commands with specified manager to apply changes.
+    Create command to apply changes with specified manager.
     Manager can be 'xrandr' or 'nvidia'.
     """
     if not get_enabled(monitors):
         sys.exit("At least one enabled monitor is required!")
 
     if manager == XRANDR:
-        command = create_xrandr_command(monitors, primary)
+        return create_xrandr_command(monitors, primary)
     elif manager == NVIDIA:
-        command = create_nvidia_command(monitors, primary)
+        return create_nvidia_command(monitors, primary)
     else:
         raise ValueError("Incorrect manager specified. "
                          "Must be '%s' or '%s'" % (XRANDR, NVIDIA))
 
+
+def apply_changes(command):
+    """ Run given command to apply changes to monitors. """
     try:
         subprocess.run(command,
                        stdout=subprocess.DEVNULL,
@@ -297,8 +303,6 @@ def apply_changes(monitors, primary, manager):
     except subprocess.CalledProcessError:
         sys.exit("The following command returned non-zero exit status:\n%s"
                  % command)
-    if args.verbose:
-        print(command)
 
 
 def only_target(monitors, target):
@@ -329,7 +333,7 @@ try:
 except AttributeError:
     target = None
 
-# Apply chosen action
+# Enable or disable monitor objects based on chosen action
 if args.action == 'toggle':
     target.is_enabled = not target.is_enabled
 elif args.action == 'enable':
@@ -344,11 +348,15 @@ elif args.action == 'toggle-only':
 elif args.action == 'enable-only':
     only_target(sorted_monitors, target)
 
-if target is not None:
+if args.action is not None:
     recalculate_positions(sorted_monitors)
     manager = NVIDIA if args.nvidia else XRANDR
     new_primary = get_new_primary(sorted_monitors, original_primary)
-    apply_changes(sorted_monitors, new_primary, manager)
+    command = create_command(sorted_monitors, new_primary, manager)
+    if args.norun or args.verbose:
+        print(command)
+    if not args.norun:
+        apply_changes(command)
 
 if args.status:
     print_monitors(sorted_monitors)
