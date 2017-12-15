@@ -35,27 +35,31 @@ actions = parser.add_subparsers(title='actions', dest='action')
 TARGET_HELP = ('position of target monitor to apply action to starting at 1 '
                'from left to right')
 
-# Toggle command
+# Toggle action
 parser_toggle = actions.add_parser('toggle', help='toggle target monitor')
 parser_toggle.add_argument('target', type=int, help=TARGET_HELP)
 
-# Enable command
+# Enable action
 parser_enable = actions.add_parser('enable', help='enable target monitor')
 parser_enable.add_argument('target', type=int, help=TARGET_HELP)
 
-# Disable command
+# Disable action
 parser_disable = actions.add_parser('disable',
                                     help='disable target monitor')
 parser_disable.add_argument('target', type=int, help=TARGET_HELP)
 
-# Toggle-only command
+# Enable-all action
+parser_enable_all = actions.add_parser('enable-all',
+                                       help='enable all monitors')
+
+# Toggle-only action
 parser_toggle_only = actions.add_parser('toggle-only',
                                         help='toggle wheather or not the '
                                              'target monitor is the only '
                                              'one on')
 parser_toggle_only.add_argument('target', type=int, help=TARGET_HELP)
 
-# Enable-only command
+# Enable-only action
 parser_enable_only = actions.add_parser('enable-only',
                                         help='make target monitor the only '
                                              'one on')
@@ -340,6 +344,8 @@ elif args.action == 'enable':
     target.is_enabled = True
 elif args.action == 'disable':
     target.is_enabled = False
+elif args.action == 'enable-all':
+    enable_all(sorted_monitors)
 elif args.action == 'toggle-only':
     if target.is_enabled and len(get_enabled(sorted_monitors)) == 1:
         enable_all(sorted_monitors)
