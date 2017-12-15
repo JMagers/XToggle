@@ -29,11 +29,16 @@ parser.add_argument('--norun',
 STATUS_FLAG_NAMES = ('--status', '-s')
 parser.add_argument(*STATUS_FLAG_NAMES,
                     action='store_true',
-                    help='print status of monitors')
+                    help='print connection status and positional ids of '
+                    'monitors')
 actions = parser.add_subparsers(title='actions', dest='action')
 
-TARGET_HELP = ('position of target monitor to apply action to starting at 1 '
-               'from left to right')
+TARGET_HELP = (
+    'integer id of monitor to apply action to; ids range from 1-N '
+    'where N is the number of connected monitors; ids are assigned '
+    'based on the monitors horizontal position (from left to right); '
+    'use --status to see positional ids'
+)
 
 # Toggle action
 parser_toggle = actions.add_parser('toggle', help='toggle target monitor')
