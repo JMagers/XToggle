@@ -82,6 +82,7 @@ class Monitor:
         self.rank = None
         self.width = None
         self.height = None
+        self.rate = None
         self.is_enabled = None
         self.metamodes = None
 
@@ -170,7 +171,7 @@ if args.nvidia:
     except IOError:
         sys.exit("'%s' does not exist or could not be read!" % XORG_CONF)
 
-# Get dimensions, position, and primary status of each monitor
+# Get dimensions, rate, position, and primary status of each monitor
 original_primary = None
 try:
     tree = ET.parse(MONITORS_XML)
@@ -183,16 +184,17 @@ for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
     except KeyError:
         continue
 
-    # Get dimensions
+    # Get dimensions and rate
     try:
         monitor.width = int(monitor_tag.find('monitor/mode/width').text)
         monitor.height = int(monitor_tag.find('monitor/mode/height').text)
+        monitor.rate = float(monitor_tag.find('monitor/mode/rate').text)
     except AttributeError:
-        sys.exit("Monitor, '%s', has no width/height tag in '%s'!"
+        sys.exit("Monitor, '%s', has no width/height/rate tag(s) in '%s'!"
                  % (name, MONITORS_XML))
     except ValueError:
-        sys.exit("Width/height tag for monitor, '%s', in '%s' is not an "
-                 "integer!" % (name, MONITORS_XML))
+        sys.exit("Width/height/rate tag(s) for monitor, '%s', in '%s' are not "
+                 "of correct numeric type!" % (name, MONITORS_XML))
 
     # Get primary status
     try:
@@ -214,7 +216,7 @@ for monitor_tag in tree.findall('.//configuration/logicalmonitor'):
 
 # Check that all monitor information was found
 for name, monitor in monitors.items():
-    if None in (monitor.width, monitor.height, monitor.xpos):
+    if None in (monitor.width, monitor.height, monitor.rate, monitor.xpos):
         sys.exit("Could not find info for monitor, '%s', in '%s'!"
                  % (name, MONITORS_XML))
 if original_primary is None:
@@ -270,9 +272,10 @@ def create_xrandr_command(monitors, primary):
         output = '--output \'%s\'' % monitor.name
         if monitor.is_enabled:
             mode = '--mode %dx%d' % (monitor.width, monitor.height)
+            rate = '--rate %.2f' % monitor.rate
             pos = '--pos %dx%d' % (monitor.xpos, monitor.ypos)
             primary_opt = '--primary' if monitor is primary else None
-            options_list = filter(None, [output, mode, pos, primary_opt])
+            options_list = filter(None, [output, mode, rate, pos, primary_opt])
             options = ' '.join(options_list)
         else:
             options = output + ' --off'
