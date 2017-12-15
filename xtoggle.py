@@ -265,18 +265,19 @@ def create_nvidia_command(monitors, primary):
 
 def create_xrandr_command(monitors, primary):
     """ Generate xrandr command to apply changes to monitors """
-    monitor_settings = []
+    all_options = []
     for monitor in monitors:
-        output = '--output %s' % monitor.name
+        output = '--output \'%s\'' % monitor.name
         if monitor.is_enabled:
             mode = '--mode %dx%d' % (monitor.width, monitor.height)
             pos = '--pos %dx%d' % (monitor.xpos, monitor.ypos)
-            primary_opt = '--primary' if monitor is primary else ''
-            monitor_setting = ' '.join([output, mode, pos, primary_opt])
+            primary_opt = '--primary' if monitor is primary else None
+            options_list = filter(None, [output, mode, pos, primary_opt])
+            options = ' '.join(options_list)
         else:
-            monitor_setting = output + ' --off'
-        monitor_settings.append(monitor_setting)
-    return 'xrandr ' + ' '.join(monitor_settings)
+            options = output + ' --off'
+        all_options.append(options)
+    return 'xrandr ' + ' '.join(all_options)
 
 
 def create_command(monitors, primary, manager):
